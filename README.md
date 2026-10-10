@@ -4,7 +4,7 @@ A car dashboard on an old **Kindle 4 (non-touch)** e-ink screen. A small Python 
 
 Built for a Shell Eco-marathon car: speed, battery, temperature and position on a track map, readable in sunlight, with no extra display hardware.
 
-> **Status: work in progress.** The server currently generates **fake data** so the layout can be tested. Refresh rate is being optimised (goal: about 1 update per second).
+> **Status: work in progress.** The server currently generates **fake data** and a placeholder track shape so the layout can be tested. Real data and the real track outline will come from ROS 2 (see [Planned](#planned-real-data-from-ros-2)). Refresh rate is being optimised (goal: about 1 update per second).
 
 ## Preview
 
@@ -15,7 +15,7 @@ Built for a Shell Eco-marathon car: speed, battery, temperature and position on 
 - **Speed**: huge number plus a 24-segment rising bar
 - **Battery**: percentage and 10 cells; the card inverts to white-on-black below 20 %
 - **Temperature**: value and bar; the card inverts above 45 °C
-- **Track map**: course outline with a moving car dot
+- **Track map**: outline of the race course with a moving car dot (placeholder shape for now; it will be replaced by the real course outline)
 - **Top bar**: clock, frame counter and a heartbeat square that flips on every refresh, so you can see the real update rate
 
 Black and white only, with thick strokes and big numbers, because e-ink has no colour and thin lines look bad.
@@ -135,6 +135,26 @@ To keep it running after you close the SSH session, use `nohup sh /mnt/us/fast.s
 | `SERVER` | `fast.sh` | URL of the image, with the server's IP |
 | `FULL_FLASH_EVERY` | `fast.sh` | Full-flash refresh every N frames (ghosting vs. flicker) |
 
+## Planned: real data from ROS 2
+
+The dashboard will not use GPS directly. The car's position on the track comes from the ROS 2 code, and the track outline is a fixed drawing of the race course.
+
+**Track outline**: a `track.json` file with a list of points around the loop.
+- The first point is the start/finish line, and the points follow the driving direction.
+- It can be built from the official track map, a recorded lap, or a traced satellite image.
+- It is only a drawing for the screen, so it does not need to be to scale.
+
+**Position topic**: `/track/progress` (`std_msgs/Float32`)
+- Fraction of the lap completed since the start/finish line, from `0.0` to `1.0`, in the driving direction.
+- Wraps from `1.0` back to `0.0` at the line.
+- The server converts it into a point along the outline, so it never needs coordinates.
+
+**Running on the Pi**: `server.py` will move to the Raspberry Pi, with a background thread (`rclpy`) that subscribes to the topics and keeps the latest values. If no message arrives for a couple of seconds, the dashboard shows dashes instead of stale numbers. Until then, test with a fake publisher:
+
+```bash
+ros2 topic pub /track/progress std_msgs/Float32 "{data: 0.25}"
+```
+
 ## Troubleshooting
 
 | Problem | Likely cause and fix |
@@ -152,7 +172,7 @@ To keep it running after you close the SSH session, use `nohup sh /mnt/us/fast.s
 
 - [ ] Faster refresh (about 1 update per second): CPU governor, overlapping download and draw, partial updates with periodic full flash
 - [ ] Real data instead of fake: speed, battery and temperature from the car (ROS 2 topics on a Raspberry Pi)
-- [ ] Real GPS position on the track map, using the course outline recorded from the car
+- [ ] Track outline matching the race course (`track.json`), with the car position from a ROS 2 topic (`/track/progress`)
 - [ ] Run the server on the Raspberry Pi in the car, on the car's own Wi-Fi hotspot
 - [ ] Autostart the display loop on boot (kite / KUAL)
 - [ ] Wi-Fi reconnect, low-battery screen and "no data" screen on the Kindle
